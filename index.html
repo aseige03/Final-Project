@@ -8,13 +8,18 @@
       <style>
             :root{--bg:#0f1724;--card:#0b1220;--muted:#9aa4b2;--accent:#06b6d4}
             html,body{height:100%}
-            body{margin:0;background:linear-gradient(180deg,#071024 0%,#061327 100%);color:#e6eef6;font-family:Inter,system-ui,Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:12px}
-            .app{width:800px;max-width:95%;}
+            :root{--ui-scale:1}
+            body{margin:0;background:linear-gradient(180deg,#071024 0%,#061327 100%);color:#e6eef6;font-family:Inter,system-ui,Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:12px;overflow:auto}
+            .app{width:800px;max-width:95%;transform:scale(var(--ui-scale));transform-origin:top center;transition:transform 0.12s ease}
             header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
             h1{font-size:16px;margin:0}
             .controls{display:flex;gap:12px;align-items:center}
+            .zoom-control{display:flex;align-items:center;gap:8px}
+            .zoom-control input[type=range]{width:120px}
+            .zoom-control .val{color:var(--muted);font-size:13px}
             select{background:#0b1220;border:1px solid #122033;color:#e6eef6;padding:8px 12px;border-radius:8px}
-            .card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);padding:12px;border-radius:12px}
+            .card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);padding:12px;border-radius:12px;max-height:calc(100vh - 160px);overflow:auto}
+            .card p{font-size:14px}
             .teams{display:flex;gap:18px;margin-top:16px}
             .team{flex:1;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:12px;border-radius:10px;display:flex;align-items:center;gap:12px}
             .logo{width:64px;height:64px;border-radius:12px;flex:0 0 64px;display:flex;align-items:center;justify-content:center;background:#0b1622;border:1px solid rgba(255,255,255,0.03);overflow:hidden}
@@ -49,6 +54,11 @@
                   <div class="controls" id="controls">
                         <label for="yearSelect" style="color:var(--muted);font-size:13px">Select year</label>
                         <select id="yearSelect"><option>Loading…</option></select>
+                        <div class="zoom-control" title="Adjust zoom">
+                              <label for="zoomRange" style="color:var(--muted);font-size:13px">Zoom</label>
+                              <input id="zoomRange" type="range" min="0.7" max="1.0" step="0.05" value="1">
+                              <div class="val" id="zoomVal">100%</div>
+                        </div>
                   </div>
             </header>
 
@@ -87,6 +97,7 @@
                                           FROM superbowl_champions;
                                     </p>
                                     <p style="line-height:1.5;margin-top:12px;margin-bottom:0;color:#d8e2ec"><strong>4)</strong> On the next page using the arrows at the bottom of the screen you will find my interactive web application. In this web application you as the user you will be able to see all of the following: The game score - winner in green loser in red, The teams that played in that superbowl and their logos, what superbowl it was in roman numerals, the date of the game, and where the game was held. In order to interact with the application there is a drop bar located on the right hand side of the score board where you will select the year and it will show all of the data for that game.</p>
+                                    <p style="line-height:1.5;margin-top:12px;margin-bottom:0;color:#c8d4e0"><strong>Repository Link:</strong> <a href="https://github.com/aseige03/Final-Project" target="_blank" rel="noopener" style="color:#06b6d4;text-decoration:underline">https://github.com/aseige03/Final-Project</a></p>
                               </div>
                         </section>
 
@@ -292,7 +303,69 @@
                         d.addEventListener('click', ()=>{ idx = parseInt(d.dataset.index,10); update(); });
                   });
 
+                  // mouse wheel navigation for slides (hover over slider)
+                  let wheelCooldown = false;
+                  const sliderEl = document.querySelector('.slider');
+                  sliderEl.addEventListener('wheel', (e)=>{
+                        // If user holds Shift, allow normal page scrolling
+                        if(e.shiftKey) return;
+
+                        // If the wheel target (or an ancestor) is a scrollable element and can scroll
+                        // in the direction of the wheel, let it scroll instead of changing slides.
+                        function findScrollable(el){
+                              while(el && el !== document.body){
+                                    const style = window.getComputedStyle(el);
+                                    const overflowY = style.overflowY;
+                                    if((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight){
+                                          return el;
+                                    }
+                                    el = el.parentElement;
+                              }
+                              return null;
+                        }
+
+                        const scrollable = findScrollable(e.target);
+                        if(scrollable){
+                              // determine if the scrollable can scroll further in this direction
+                              if(e.deltaY > 0 && scrollable.scrollTop + scrollable.clientHeight < scrollable.scrollHeight) return;
+                              if(e.deltaY < 0 && scrollable.scrollTop > 0) return;
+                              // otherwise fall through to slide navigation (we're at the edge)
+                        }
+
+                        e.preventDefault();
+                        if(wheelCooldown) return;
+                        if(e.deltaY > 10){ idx = (idx+1)%2; update(); }
+                        else if(e.deltaY < -10){ idx = (idx+2-1)%2; update(); }
+                        wheelCooldown = true;
+                        setTimeout(()=>{ wheelCooldown = false }, 500);
+                  }, {passive:false});
+
                   update();
+            })();
+            // initialize zoom control
+            (function(){
+                  const zoomRange = document.getElementById('zoomRange');
+                  const zoomVal = document.getElementById('zoomVal');
+                  const appEl = document.querySelector('.app');
+                  if(!zoomRange) return;
+                  function setScale(v){
+                        // apply transform and store variable for CSS
+                        appEl.style.transform = `scale(${v})`;
+                        zoomVal.textContent = Math.round(v*100) + '%';
+                        document.documentElement.style.setProperty('--ui-scale', v);
+                  }
+                  zoomRange.addEventListener('input', (e)=> setScale(e.target.value));
+                  // allow mouse wheel while holding alt/ctrl to adjust zoom
+                  zoomRange.addEventListener('wheel', (e)=>{
+                        e.preventDefault();
+                        const step = parseFloat(zoomRange.step) || 0.05;
+                        let v = parseFloat(zoomRange.value);
+                        v += e.deltaY > 0 ? -step : step;
+                        v = Math.max(parseFloat(zoomRange.min), Math.min(parseFloat(zoomRange.max), v));
+                        zoomRange.value = v.toFixed(2);
+                        setScale(v);
+                  }, {passive:false});
+                  setScale(zoomRange.value);
             })();
       </script>
 </body>
